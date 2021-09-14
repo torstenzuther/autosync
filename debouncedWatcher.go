@@ -13,27 +13,41 @@ type debouncedWatcher struct {
 	*sync.WaitGroup
 	eventQueue   *eventQueue
 	debounceTime time.Duration
+	watcher      *fsnotify.Watcher
 }
 
-func newDebouncedWatcher(debounceTime time.Duration) *debouncedWatcher {
+func newDebouncedWatcher(debounceTime time.Duration) (*debouncedWatcher, error) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
 	return &debouncedWatcher{
 		WaitGroup:    &sync.WaitGroup{},
 		eventQueue:   newEventQueue(),
 		debounceTime: debounceTime,
-	}
+		watcher:      watcher,
+	}, nil
 }
 
-func (w *debouncedWatcher) watchAsync(watcher *fsnotify.Watcher) func() error {
+func (w *debouncedWatcher) add(file string) error {
+	return w.watcher.Add(file)
+}
+
+func (w *debouncedWatcher) close() error {
+	return w.watcher.Close()
+}
+
+func (w *debouncedWatcher) watchAsync() func() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	w.Add(1)
-	go w.watch(ctx, watcher)
+	go w.watch(ctx)
 	return func() error {
 		cancel()
-		return watcher.Close()
+		return w.close()
 	}
 }
 
-func (w *debouncedWatcher) watch(ctx context.Context, watcher *fsnotify.Watcher) {
+func (w *debouncedWatcher) watch(ctx context.Context) {
 	events := newEventQueue()
 	debounceTicker := time.NewTicker(time.Second * debounceTimeInSeconds)
 
@@ -48,7 +62,7 @@ func (w *debouncedWatcher) watch(ctx context.Context, watcher *fsnotify.Watcher)
 	}
 	for {
 		select {
-		case event, ok := <-watcher.Events:
+		case event, ok := <-w.watcher.Events:
 			if !ok {
 				quit()
 				return
@@ -56,7 +70,7 @@ func (w *debouncedWatcher) watch(ctx context.Context, watcher *fsnotify.Watcher)
 			events.queue(event)
 		case <-debounceTicker.C:
 			events.flush(processElement)
-		case err, ok := <-watcher.Errors:
+		case err, ok := <-w.watcher.Errors:
 			if !ok {
 				quit()
 				return

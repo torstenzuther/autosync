@@ -5,8 +5,6 @@ import (
 	"log"
 	"os"
 	"time"
-
-	"github.com/fsnotify/fsnotify"
 )
 
 const (
@@ -14,19 +12,19 @@ const (
 )
 
 func main() {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
 	if len(os.Args) < 2 {
 		log.Fatal("Please add path as argument")
 	}
-	err = watcher.Add(os.Args[1])
+	debouncedWatcher, err := newDebouncedWatcher(time.Second * debounceTimeInSeconds)
 	if err != nil {
 		log.Fatal(err)
 	}
-	debouncedWatcher := newDebouncedWatcher(time.Second * debounceTimeInSeconds)
-	cancel := debouncedWatcher.watchAsync(watcher)
+	defer debouncedWatcher.close()
+	err = debouncedWatcher.add(os.Args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	cancel := debouncedWatcher.watchAsync()
 	reader := bufio.NewReader(os.Stdin)
 	_, _, err = reader.ReadRune()
 	if err != nil {
