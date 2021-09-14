@@ -7,8 +7,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// eventQueue holds events and embeds a sync.WaitGroup which is
-// holds the number of elements in the queue
+// eventQueue holds events and embeds a sync.WaitGroup whose
+// counter equals the number of elements in the queue
 type eventQueue struct {
 	*sync.WaitGroup
 	events map[string]fsnotify.Event
