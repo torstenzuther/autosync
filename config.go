@@ -23,7 +23,7 @@ func parseConfig(reader io.Reader) (*config, error) {
 	result := &config{paths: map[string]string{}}
 	for scanner.Scan() {
 		trimmed := bytes.TrimSpace(scanner.Bytes())
-		if bytes.HasPrefix(trimmed, []byte(comment)) {
+		if len(trimmed) == 0 || bytes.HasPrefix(trimmed, []byte(comment)) {
 			continue
 		}
 		splitted := bytes.Split(trimmed, []byte(separator))
