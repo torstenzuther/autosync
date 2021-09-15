@@ -1,12 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
+	"github.com/rjeczalik/notify"
 )
 
 // debouncedWatcher is a file watcher which de-bounces events
@@ -14,55 +13,47 @@ import (
 type debouncedWatcher struct {
 	*sync.WaitGroup
 	eventQueue   *eventQueue
+	events       chan notify.EventInfo
 	debounceTime time.Duration
-	watcher      *fsnotify.Watcher
 }
 
 // newDebounceWatcher returns a new debounceWatcher instance with the given
 // debounceTime or returns an error
-func newDebouncedWatcher(debounceTime time.Duration) (*debouncedWatcher, error) {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, err
-	}
+func newDebouncedWatcher(debounceTime time.Duration) *debouncedWatcher {
 	return &debouncedWatcher{
 		WaitGroup:    &sync.WaitGroup{},
 		eventQueue:   newEventQueue(),
 		debounceTime: debounceTime,
-		watcher:      watcher,
-	}, nil
+		events:       make(chan notify.EventInfo, 1000),
+	}
 }
 
 // add a file to be watched
 func (w *debouncedWatcher) add(file string) error {
-	return w.watcher.Add(file)
+	return notify.Watch(file, w.events, notify.All)
 }
 
 // close the debouncedWatcher. This should be called whenever the
 // debouncedWatcher is not used anymore
-func (w *debouncedWatcher) close() error {
-	return w.watcher.Close()
+func (w *debouncedWatcher) close() {
+	notify.Stop(w.events)
+	close(w.events)
+	w.Wait()
 }
 
 // watchAsync starts watching the registered files in a separate go-routine.
 // It returns a cancel function which can be called to stop watching.
-func (w *debouncedWatcher) watchAsync() func() error {
-	ctx, cancel := context.WithCancel(context.Background())
+func (w *debouncedWatcher) watchAsync() {
 	w.Add(1)
-	go w.watch(ctx)
-	return func() error {
-		cancel()
-		return w.close()
-	}
+	go w.watch()
 }
 
 // watch the registered files. It stops when ctx is done.
-func (w *debouncedWatcher) watch(ctx context.Context) {
+func (w *debouncedWatcher) watch() {
 	events := newEventQueue()
 	debounceTicker := time.NewTicker(time.Second * debounceTimeInSeconds)
-
-	processElement := func(event fsnotify.Event) {
-		fmt.Printf("DEBOUNCE: %v %v\n", event.Op, event.Name)
+	processElement := func(path string, event notify.Event) {
+		fmt.Printf("DEBOUNCE: %v %v\n", path, event)
 	}
 	quit := func() {
 		debounceTicker.Stop()
@@ -72,7 +63,7 @@ func (w *debouncedWatcher) watch(ctx context.Context) {
 	}
 	for {
 		select {
-		case event, ok := <-w.watcher.Events:
+		case event, ok := <-w.events:
 			if !ok {
 				quit()
 				return
@@ -80,15 +71,6 @@ func (w *debouncedWatcher) watch(ctx context.Context) {
 			events.queue(event)
 		case <-debounceTicker.C:
 			events.flush(processElement)
-		case err, ok := <-w.watcher.Errors:
-			if !ok {
-				quit()
-				return
-			}
-			fmt.Printf("ERR: %v\n", err)
-		case <-ctx.Done():
-			quit()
-			return
 		}
 	}
 }
