@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -45,7 +44,7 @@ func TestParseConfig(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			input: "  alias\n  \t\ralias2\t   \r\n ",
+			input: "  alias\n  \t\ralias2\t   \r\n    \r\n",
 			expectedConfig: &config{paths: map[string]string{
 				"alias":  "alias",
 				"alias2": "alias2",
@@ -63,12 +62,21 @@ func TestParseConfig(t *testing.T) {
 		{
 			input:          "  alias  : \rfile:file\n  \t\ralias2\t   \r\n ",
 			expectedConfig: nil,
-			expectedError:  errors.New(fmt.Sprintf("Malformed line")),
+			expectedError:  errors.New("malformed line"),
+		},
+		{
+			input:          "alias: 123\nalias:321",
+			expectedConfig: nil,
+			expectedError:  errors.New("duplicated alias"),
 		},
 	} {
 		reader := strings.NewReader(test.input)
 		config, err := parseConfig(reader)
 		assert.Equal(t, config, test.expectedConfig)
-		assert.ErrorIs(t, err, test.expectedError)
+		if test.expectedError != nil {
+			assert.Error(t, err, test.expectedError)
+		} else {
+			assert.Nil(t, err)
+		}
 	}
 }

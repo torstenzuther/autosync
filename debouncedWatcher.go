@@ -33,12 +33,12 @@ func newDebouncedWatcher(debounceTime time.Duration) (*debouncedWatcher, error) 
 	}, nil
 }
 
-// add adds a file to be watched
+// add a file to be watched
 func (w *debouncedWatcher) add(file string) error {
 	return w.watcher.Add(file)
 }
 
-// close closes the debouncedWatcher. This should be called whenever the
+// close the debouncedWatcher. This should be called whenever the
 // debouncedWatcher is not used anymore
 func (w *debouncedWatcher) close() error {
 	return w.watcher.Close()
@@ -56,7 +56,7 @@ func (w *debouncedWatcher) watchAsync() func() error {
 	}
 }
 
-// watch watches the registered files. It stops when ctx is done.
+// watch the registered files. It stops when ctx is done.
 func (w *debouncedWatcher) watch(ctx context.Context) {
 	events := newEventQueue()
 	debounceTicker := time.NewTicker(time.Second * debounceTimeInSeconds)
