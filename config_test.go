@@ -9,16 +9,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// nonFunctioningReader is a custom reader implementation which returns an error
 type nonFunctioningReader struct{}
 
+// Read implements the io.Reader. It always just returns an error.
 func (e nonFunctioningReader) Read(_ []byte) (n int, err error) {
 	return 0, errors.New("error from reader")
 }
 
+// newStringReader returns a string reader from the given string
 func newStringReader(value string) io.Reader {
 	return strings.NewReader(value)
 }
 
+// newNonFunctionReader returns a nonFunctioningReader
 func newNonFunctioningReader() io.Reader {
 	return nonFunctioningReader{}
 }
