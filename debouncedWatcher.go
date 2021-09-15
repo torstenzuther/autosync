@@ -8,6 +8,8 @@ import (
 	"github.com/rjeczalik/notify"
 )
 
+const eventChannelSize = 10000
+
 // debouncedWatcher is a file watcher which de-bounces events
 // i.e. events are accumulated and only flushed after the debounceTime has elapsed
 type debouncedWatcher struct {
@@ -17,24 +19,24 @@ type debouncedWatcher struct {
 	debounceTime time.Duration
 }
 
-// newDebounceWatcher returns a new debounceWatcher instance with the given
-// debounceTime or returns an error
+// newDebounceWatcher returns a new debouncedWatcher instance with the given
+// debounceTime
 func newDebouncedWatcher(debounceTime time.Duration) *debouncedWatcher {
 	return &debouncedWatcher{
 		WaitGroup:    &sync.WaitGroup{},
 		eventQueue:   newEventQueue(),
 		debounceTime: debounceTime,
-		events:       make(chan notify.EventInfo, 1000),
+		events:       make(chan notify.EventInfo, eventChannelSize),
 	}
 }
 
-// add a file to be watched
+// add a file or folder to be watched
 func (w *debouncedWatcher) add(file string) error {
 	return notify.Watch(file, w.events, notify.All)
 }
 
 // close the debouncedWatcher. This should be called whenever the
-// debouncedWatcher is not used anymore
+// debouncedWatcher is not used anymore.
 func (w *debouncedWatcher) close() {
 	notify.Stop(w.events)
 	close(w.events)
@@ -42,13 +44,12 @@ func (w *debouncedWatcher) close() {
 }
 
 // watchAsync starts watching the registered files in a separate go-routine.
-// It returns a cancel function which can be called to stop watching.
 func (w *debouncedWatcher) watchAsync() {
 	w.Add(1)
 	go w.watch()
 }
 
-// watch the registered files. It stops when ctx is done.
+// watch the registered files.
 func (w *debouncedWatcher) watch() {
 	events := newEventQueue()
 	debounceTicker := time.NewTicker(time.Second * debounceTimeInSeconds)
