@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -21,18 +20,14 @@ type debouncedWatcher struct {
 
 // newDebounceWatcher returns a new debouncedWatcher instance with the given
 // debounceTime
-func newDebouncedWatcher(debounceTime time.Duration) *debouncedWatcher {
-	return &debouncedWatcher{
+func newDebouncedWatcher(file string, debounceTime time.Duration) (*debouncedWatcher, error) {
+	w := &debouncedWatcher{
 		WaitGroup:    &sync.WaitGroup{},
 		eventQueue:   newEventQueue(),
 		debounceTime: debounceTime,
 		events:       make(chan notify.EventInfo, eventChannelSize),
 	}
-}
-
-// add a file or folder to be watched
-func (w *debouncedWatcher) add(file string) error {
-	return notify.Watch(file, w.events, notify.All)
+	return w, notify.Watch(file, w.events, notify.All)
 }
 
 // close the debouncedWatcher. This should be called whenever the
@@ -44,23 +39,19 @@ func (w *debouncedWatcher) close() {
 }
 
 // watchAsync starts watching the registered files in a separate go-routine.
-func (w *debouncedWatcher) watchAsync() {
+func (w *debouncedWatcher) watchAsync(processElement func(path string, event notify.Event)) {
 	w.Add(1)
-	go w.watch()
+	go w.watch(processElement)
 }
 
 // watch the registered files.
-func (w *debouncedWatcher) watch() {
+func (w *debouncedWatcher) watch(processElement func(path string, event notify.Event)) {
 	events := newEventQueue()
 	debounceTicker := time.NewTicker(time.Second * debounceTimeInSeconds)
-	processElement := func(path string, event notify.Event) {
-		fmt.Printf("DEBOUNCE: %v %v\n", path, event)
-	}
 	quit := func() {
+		defer w.Done()
 		debounceTicker.Stop()
 		events.flush(processElement)
-		w.Done()
-		fmt.Printf("DONE\n")
 	}
 	for {
 		select {
