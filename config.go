@@ -17,6 +17,7 @@ type config struct {
 	paths map[string]string
 }
 
+// parseConfig reads the config or returns an error
 func parseConfig(reader io.Reader) (*config, error) {
 	scanner := bufio.NewScanner(reader)
 	result := &config{paths: map[string]string{}}

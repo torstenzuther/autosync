@@ -8,11 +8,13 @@ import (
 	"github.com/rjeczalik/notify"
 )
 
+// watcherSwarm is a set of watchers
 type watcherSwarm struct {
 	watchers       map[string]watcher
 	watcherFactory watcherFactory
 }
 
+// newWatcherSwarm returns a new watcherSwarm instance
 func newWatcherSwarm(watcherFactory func(string) (watcher, error)) *watcherSwarm {
 	return &watcherSwarm{
 		watchers:       map[string]watcher{},
@@ -20,6 +22,7 @@ func newWatcherSwarm(watcherFactory func(string) (watcher, error)) *watcherSwarm
 	}
 }
 
+// updateWatchers reconfigures the watcherSwarm by closing and recreating watchers
 func (w *watcherSwarm) updateWatchers(config *config) {
 	w.close()
 	w.watchers = map[string]watcher{}
@@ -43,6 +46,7 @@ func (w *watcherSwarm) updateWatchers(config *config) {
 	}
 }
 
+// close the watcherSwarm i.e. all its watchers
 func (w *watcherSwarm) close() {
 	for _, watcher := range w.watchers {
 		watcher.close()
