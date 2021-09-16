@@ -7,7 +7,10 @@ import (
 	"github.com/rjeczalik/notify"
 )
 
-const eventChannelSize = 10000
+const (
+	eventChannelSize      = 10000
+	debounceTimeInSeconds = 1
+)
 
 // debouncedWatcher is a file watcher which de-bounces events
 // i.e. events are accumulated and only flushed after the debounceTime has elapsed

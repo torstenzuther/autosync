@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"log"
+	"os"
 )
 
 const (
@@ -50,4 +52,18 @@ func parseConfig(reader io.Reader) (*config, error) {
 	}
 
 	return result, nil
+}
+
+// mustReadConfig reads the config from the file system
+// If there is an error it will panic
+func mustReadConfig(path string) *config {
+	configFile, err := os.Open(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	config, err := parseConfig(configFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return config
 }
