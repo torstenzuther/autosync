@@ -35,7 +35,6 @@ func (w *watcherSwarm) updateWatchers(config *config) {
 		watcher, err := w.watcherFactory(watchPath)
 		if err != nil {
 			log.Printf("%v\n", err)
-			watcher.close()
 			continue
 		}
 		watcher.watchAsync(processFunc(alias, configPathPatternAbs))

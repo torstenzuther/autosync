@@ -19,15 +19,22 @@ type debouncedWatcher struct {
 }
 
 // newDebounceWatcher returns a new debouncedWatcher instance with the given
-// debounceTime
+// file and debounceTime. It immediately starts watching or returns an error.
 func newDebouncedWatcher(file string, debounceTime time.Duration) (*debouncedWatcher, error) {
+	events := make(chan notify.EventInfo, eventChannelSize)
+	err := notify.Watch(file, events, notify.All)
+	if err != nil {
+		defer close(events)
+		defer notify.Stop(events)
+		return nil, err
+	}
 	w := &debouncedWatcher{
 		WaitGroup:    &sync.WaitGroup{},
 		eventQueue:   newEventQueue(),
 		debounceTime: debounceTime,
-		events:       make(chan notify.EventInfo, eventChannelSize),
+		events:       events,
 	}
-	return w, notify.Watch(file, w.events, notify.All)
+	return w, nil
 }
 
 // close the debouncedWatcher. This should be called whenever the
@@ -44,7 +51,7 @@ func (w *debouncedWatcher) watchAsync(processElement func(path string, event not
 	go w.watch(processElement)
 }
 
-// watch the registered files.
+// watch the registered files and call the given callback function for each event
 func (w *debouncedWatcher) watch(processElement func(path string, event notify.Event)) {
 	events := newEventQueue()
 	debounceTicker := time.NewTicker(time.Second * debounceTimeInSeconds)
