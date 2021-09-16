@@ -66,3 +66,7 @@ func (w *debouncedWatcher) watch(processElement func(path string, event notify.E
 		}
 	}
 }
+
+func debouncedWatcherFactory(watchPath string) (watcher, error) {
+	return newDebouncedWatcher(watchPath, time.Second*debounceTimeInSeconds)
+}
