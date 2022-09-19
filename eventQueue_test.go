@@ -69,10 +69,10 @@ func TestQueueFlush(t *testing.T) {
 			},
 		},
 	} {
-		var paths = []string{}
-		var events = []notify.Event{}
-		var expectedEvents = []notify.Event{}
-		var actualEvents = []notify.Event{}
+		var paths []string
+		var events []notify.Event
+		var expectedEvents []notify.Event
+		var actualEvents []notify.Event
 
 		eventQueue := newEventQueue()
 		for _, event := range test.expectedProcessedEvents {
