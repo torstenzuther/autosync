@@ -31,13 +31,13 @@ func newDebouncedWatcher(file string, debounceTime time.Duration) (*debouncedWat
 		defer notify.Stop(events)
 		return nil, err
 	}
-	w := &debouncedWatcher{
+
+	return &debouncedWatcher{
 		WaitGroup:    &sync.WaitGroup{},
 		eventQueue:   newEventQueue(),
 		debounceTime: debounceTime,
 		events:       events,
-	}
-	return w, nil
+	}, nil
 }
 
 // close the debouncedWatcher. This should be called whenever the
