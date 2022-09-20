@@ -25,11 +25,11 @@ func newWatcherSwarm(watcherFactory func(string) (watcher, error), store store) 
 }
 
 // updateWatchers reconfigures the watcherSwarm by closing and recreating watchers
-func (w *watcherSwarm) updateWatchers(config *config) {
+func (w *watcherSwarm) updateWatchers(config *Config) {
 	w.close()
 	w.watchers = map[string]watcher{}
-	for alias, configPathPattern := range config.paths {
-		configPathPatternAbs, err := filepath.Abs(configPathPattern)
+	for _, pathMapping := range config.PathMappings {
+		configPathPatternAbs, err := filepath.Abs(pathMapping.Pattern)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -42,7 +42,7 @@ func (w *watcherSwarm) updateWatchers(config *config) {
 			log.Printf("%v\n", err)
 			continue
 		}
-		watcher.watchAsync(processFunc(w.store, alias, configPathPatternAbs))
+		watcher.watchAsync(processFunc(w.store, pathMapping.GitPath, configPathPatternAbs))
 		w.watchers[watchPath] = watcher
 		fmt.Printf("Watching %v\n", configPathPatternAbs)
 	}

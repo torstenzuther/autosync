@@ -8,11 +8,14 @@ import (
 )
 
 const (
-	configPath = "./config"
+	configPath = "./config.json"
 )
 
 func main() {
-	config := mustReadConfig(configPath)
+	config, err := loadConfig(configPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 	store, err := newInMemoryStore(config)
 	if err != nil {
 		log.Fatal(err)

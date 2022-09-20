@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/storage/memory"
 )
@@ -25,17 +26,25 @@ type store interface {
 }
 
 type inMemoryStore struct {
-	repo *git.Repository
-	fs   billy.Filesystem
+	config *GitConfig
+	repo   *git.Repository
+	fs     billy.Filesystem
 }
 
 func (s *inMemoryStore) push() error {
 	return s.repo.Push(&git.PushOptions{
-		Auth: &http.BasicAuth{
-			Username: "torsten.zuther@web.de",
-			Password: "",
-		},
+		Auth: getAuthFromConfig(s.config),
 	})
+}
+
+func getAuthFromConfig(config *GitConfig) transport.AuthMethod {
+	if config != nil && config.Auth.UserName != "" && config.Auth.Password != "" {
+		return &http.BasicAuth{
+			Username: config.Auth.UserName,
+			Password: config.Auth.Password,
+		}
+	}
+	return nil
 }
 
 func (s *inMemoryStore) commit() error {
@@ -88,7 +97,7 @@ func (s *inMemoryStore) onCreateEvent(file string, alias string) error {
 	if _, err = worktree.Add(p); err != nil {
 		return err
 	}
-	if hash, err := worktree.Commit(fmt.Sprint("Added %v", p), &git.CommitOptions{}); err != nil {
+	if hash, err := worktree.Commit(fmt.Sprintf("Added %v", p), &git.CommitOptions{}); err != nil {
 		return err
 	} else {
 		fmt.Printf("Committed %v\n", hash)
@@ -129,14 +138,15 @@ func (s *inMemoryStore) onRemoveEvent(file string) error {
 	return nil
 }
 
-func newInMemoryStore(cfg *config) (store, error) {
+func newInMemoryStore(cfg *Config) (store, error) {
 	fs := memfs.New()
 	repo, err := git.Clone(memory.NewStorage(), fs, &git.CloneOptions{
-		URL: "https://github.com/torstenzuther/autosync-test.git",
+		URL:  cfg.GitRepo.Url,
+		Auth: getAuthFromConfig(&cfg.GitRepo),
 	})
 
-	for folder := range cfg.paths {
-		if err := fs.MkdirAll(folder, os.ModeDir); err != nil {
+	for _, pathMapping := range cfg.PathMappings {
+		if err := fs.MkdirAll(pathMapping.GitPath, os.ModeDir); err != nil {
 			return nil, err
 		}
 	}
@@ -144,7 +154,8 @@ func newInMemoryStore(cfg *config) (store, error) {
 		return nil, err
 	}
 	return &inMemoryStore{
-		repo: repo,
-		fs:   fs,
+		repo:   repo,
+		fs:     fs,
+		config: &cfg.GitRepo,
 	}, nil
 }

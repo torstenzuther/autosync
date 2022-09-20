@@ -41,7 +41,7 @@ func TestQueueFlush(t *testing.T) {
 
 	for _, test := range []testCase{
 		{
-			expectedProcessedPaths:  []string{},
+			expectedProcessedPaths:  nil,
 			expectedProcessedEvents: []notify.EventInfo{},
 		},
 		{

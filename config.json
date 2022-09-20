@@ -1,0 +1,23 @@
+{
+  "git-repo": {
+    "url": "https://github.com/torstenzuther/autosync-test.git",
+    "auth": {
+      "username": "torsten.zuther@web.de",
+      "password": ""
+    }
+  },
+  "path-mappings": [
+    {
+      "path": "b",
+      "pattern": "./test/*"
+    },
+    {
+      "path": "a",
+      "pattern": "./test/*"
+    },
+    {
+      "path": "c",
+      "pattern": "./test/*"
+    }
+  ]
+}
