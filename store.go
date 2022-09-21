@@ -17,11 +17,9 @@ import (
 )
 
 type store interface {
-	onCreateEvent(file string, alias string) error
-	onRenameEvent(file string) error
-	onWriteEvent(file string) error
-	onRemoveEvent(file string) error
-	commit() error
+	onWrite(file string, alias string) error
+	onRename(file string, alias string) error
+	onRemove(file string, alias string) error
 	push() error
 }
 
@@ -48,17 +46,20 @@ func getAuthFromConfig(config *GitConfig) transport.AuthMethod {
 }
 
 func (s *inMemoryStore) commit() error {
+
 	worktree, err := s.repo.Worktree()
 	if err != nil {
 		return err
 	}
-	if _, err = worktree.Commit("autosync", &git.CommitOptions{}); err != nil {
+	if hash, err := worktree.Commit("autosync", &git.CommitOptions{}); err != nil {
 		return err
+	} else {
+		fmt.Printf("Committed %v\n", hash)
 	}
 	return nil
 }
 
-func (s *inMemoryStore) onCreateEvent(file string, alias string) error {
+func (s *inMemoryStore) onWrite(file string, alias string) error {
 	fileNameWithoutPath := filepath.Base(file)
 	worktree, err := s.repo.Worktree()
 	if err != nil {
@@ -67,8 +68,9 @@ func (s *inMemoryStore) onCreateEvent(file string, alias string) error {
 	p := path.Join(alias, fileNameWithoutPath)
 
 	osFile, err := os.Open(file)
+	defer osFile.Close()
 	if err != nil {
-		return nil
+		return err
 	}
 	if f, err := s.fs.Create(p); err != nil {
 
@@ -77,7 +79,6 @@ func (s *inMemoryStore) onCreateEvent(file string, alias string) error {
 		var buf = make([]byte, 1000)
 		for {
 			n, e := osFile.Read(buf)
-			fmt.Printf("%v\n", buf)
 			if e != nil && e != io.EOF {
 				return e
 			}
@@ -97,42 +98,32 @@ func (s *inMemoryStore) onCreateEvent(file string, alias string) error {
 	if _, err = worktree.Add(p); err != nil {
 		return err
 	}
-	if hash, err := worktree.Commit(fmt.Sprintf("Added %v", p), &git.CommitOptions{}); err != nil {
+	if err := s.commit(); err != nil {
 		return err
-	} else {
-		fmt.Printf("Committed %v\n", hash)
 	}
 	return nil
 }
 
-func (s *inMemoryStore) onRenameEvent(file string) error {
-	//worktree, err := s.repo.Worktree()
-	//if err != nil {
-	//	return err
-	//}
-	//if _, err = worktree.Re(file); err != nil {
-	//	return err
-	//}
-	return nil
+func (s *inMemoryStore) onRename(file string, alias string) error {
+	if _, err := os.Stat(file); err == nil || !os.IsNotExist(err) {
+		return s.onWrite(file, alias)
+	}
+	return s.onRemove(file, alias)
 }
 
-func (s *inMemoryStore) onWriteEvent(file string) error {
+func (s *inMemoryStore) onRemove(file string, alias string) error {
+	fileNameWithoutPath := filepath.Base(file)
 	worktree, err := s.repo.Worktree()
 	if err != nil {
 		return err
 	}
-	if _, err = worktree.Add(file); err != nil {
-		return err
-	}
-	return nil
-}
+	p := path.Join(alias, fileNameWithoutPath)
 
-func (s *inMemoryStore) onRemoveEvent(file string) error {
-	worktree, err := s.repo.Worktree()
-	if err != nil {
+	fmt.Printf("Remove %v\n", p)
+	if _, err = worktree.Remove(p); err != nil {
 		return err
 	}
-	if _, err = worktree.Remove(file); err != nil {
+	if err := s.commit(); err != nil {
 		return err
 	}
 	return nil

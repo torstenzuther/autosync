@@ -68,13 +68,23 @@ func processFunc(store store, alias string, pattern string) func(string, notify.
 		if ok {
 			fmt.Printf(": %v %v %v -> %v\n", eventPath, patternAbs, event, alias)
 
-			if event == notify.Create || event == notify.Write {
-				if err := store.onCreateEvent(eventPath, alias); err != nil {
-					log.Printf("%v\n", err)
-				}
-				if err := store.commit(); err != nil {
-					log.Printf("%v\n", err)
-				}
+			var action func(string, string) error
+
+			switch event {
+			case notify.Create:
+				action = store.onWrite
+			case notify.Write:
+				action = store.onWrite
+			case notify.Rename:
+				action = store.onRename
+			case notify.Remove:
+				action = store.onRemove
+			default:
+				return
+			}
+
+			if err := action(eventPath, alias); err != nil {
+				log.Printf("%v\n", err)
 			}
 		}
 	}
