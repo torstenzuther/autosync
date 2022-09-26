@@ -50,6 +50,7 @@ func (w *debouncedWatcher) close() {
 
 // watchAsync starts watching the registered files in a separate go-routine.
 func (w *debouncedWatcher) watchAsync(processElement func(path string, event notify.Event)) {
+	w.Wait()
 	w.Add(1)
 	go w.watch(processElement)
 }

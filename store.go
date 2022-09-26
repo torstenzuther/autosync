@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -79,7 +80,6 @@ func (s *inMemoryStore) onWrite(file string, alias string) error {
 		return err
 	}
 	if f, err := s.fs.Create(p); err != nil {
-
 		return err
 	} else {
 		var buf = make([]byte, 1000)
@@ -136,23 +136,83 @@ func (s *inMemoryStore) onRemove(file string, alias string) error {
 }
 
 func newInMemoryStore(cfg *Config) (store, error) {
-	fs := memfs.New()
-	repo, err := git.Clone(memory.NewStorage(), fs, &git.CloneOptions{
+	filesystem := memfs.New()
+	repo, err := git.Clone(memory.NewStorage(), filesystem, &git.CloneOptions{
 		URL:  cfg.GitRepo.Url,
 		Auth: getAuthFromConfig(&cfg.GitRepo),
 	})
-
+	store := &inMemoryStore{
+		repo:   repo,
+		fs:     filesystem,
+		config: &cfg.GitRepo,
+	}
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return nil, err
+	}
+	if err := worktree.RemoveGlob("*"); err != nil {
+		return nil, err
+	}
+	//if err := removeAll(filesystem, "/", repo); err != nil {
+	//	return nil, err
+	//}
 	for _, pathMapping := range cfg.PathMappings {
-		if err := fs.MkdirAll(pathMapping.GitPath, os.ModeDir); err != nil {
+		if err := filesystem.MkdirAll(pathMapping.GitPath, os.ModeDir); err != nil {
 			return nil, err
+		}
+		patternAbs, err := filepath.Abs(pathMapping.Pattern)
+		if err != nil {
+			log.Printf("%v\n", err)
+		}
+		actualDir := filepath.Dir(patternAbs)
+		dirInfos, err := os.ReadDir(actualDir)
+		if err != nil {
+			return nil, err
+		}
+		for _, dirInfo := range dirInfos {
+			if dirInfo.IsDir() {
+				continue
+			}
+			abs := filepath.Join(actualDir, dirInfo.Name())
+			ok, err := filepath.Match(patternAbs, abs)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				if err := store.onWrite(abs, pathMapping.GitPath); err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &inMemoryStore{
-		repo:   repo,
-		fs:     fs,
-		config: &cfg.GitRepo,
-	}, nil
+	return store, nil
 }
+
+//func removeAll(filesystem billy.Filesystem, path string, repo *git.Repository) error {
+//	dirInfos, err := filesystem.ReadDir(path)
+//	if err != nil {
+//		return err
+//	}
+//	for _, dirInfo := range dirInfos {
+//		p := path
+//		if p == "/" {
+//			p = ""
+//		}
+//		pathToRemove := fmt.Sprintf("%v/%v", p, dirInfo.Name())
+//		if dirInfo.IsDir() {
+//			return removeAll(filesystem, pathToRemove, nil)
+//		}
+//		if err := filesystem.Remove(pathToRemove); err != nil {
+//			return err
+//		}
+//		worktree, err := repo.Worktree()
+//		if err != nil {
+//			return err
+//		}
+//		worktree.Remove()
+//	}
+//	return filesystem.Remove(path)
+//}

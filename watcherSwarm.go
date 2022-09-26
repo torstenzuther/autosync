@@ -10,7 +10,7 @@ import (
 
 // watcherSwarm is a set of watchers
 type watcherSwarm struct {
-	watchers       map[string]watcher
+	watchers       []watcher
 	watcherFactory watcherFactory
 	store          store
 }
@@ -18,7 +18,7 @@ type watcherSwarm struct {
 // newWatcherSwarm returns a new watcherSwarm instance
 func newWatcherSwarm(watcherFactory func(string) (watcher, error), store store) *watcherSwarm {
 	return &watcherSwarm{
-		watchers:       map[string]watcher{},
+		watchers:       []watcher{},
 		watcherFactory: watcherFactory,
 		store:          store,
 	}
@@ -27,23 +27,23 @@ func newWatcherSwarm(watcherFactory func(string) (watcher, error), store store) 
 // updateWatchers reconfigures the watcherSwarm by closing and recreating watchers
 func (w *watcherSwarm) updateWatchers(config *Config) {
 	w.close()
-	w.watchers = map[string]watcher{}
+	for _, watcher := range w.watchers {
+		watcher.close()
+	}
+	w.watchers = nil
 	for _, pathMapping := range config.PathMappings {
 		configPathPatternAbs, err := filepath.Abs(pathMapping.Pattern)
 		if err != nil {
 			log.Fatal(err)
 		}
 		watchPath := filepath.Join(filepath.Dir(configPathPatternAbs), "...")
-		if _, ok := w.watchers[watchPath]; ok {
-			w.watchers[watchPath].close()
-		}
 		watcher, err := w.watcherFactory(watchPath)
 		if err != nil {
 			log.Printf("%v\n", err)
 			continue
 		}
 		watcher.watchAsync(processFunc(w.store, pathMapping.GitPath, configPathPatternAbs))
-		w.watchers[watchPath] = watcher
+		w.watchers = append(w.watchers, watcher)
 		fmt.Printf("Watching %v\n", configPathPatternAbs)
 	}
 }
