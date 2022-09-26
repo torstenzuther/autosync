@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -22,6 +21,7 @@ type store interface {
 	onRename(file string, alias string) error
 	onRemove(file string, alias string) error
 	push() error
+	commit() error
 }
 
 type inMemoryStore struct {
@@ -29,6 +29,9 @@ type inMemoryStore struct {
 	repo   *git.Repository
 	fs     billy.Filesystem
 }
+
+const commitMessage = "autosync"
+const fileReadBufferSize = 10000
 
 func (s *inMemoryStore) push() error {
 	return s.repo.Push(&git.PushOptions{
@@ -53,58 +56,21 @@ func (s *inMemoryStore) commit() error {
 	}
 	status, err := worktree.Status()
 	if err != nil {
-		return nil
+		return err
 	}
 	if status.IsClean() {
 		return nil
 	}
-	if hash, err := worktree.Commit("autosync", &git.CommitOptions{}); err != nil {
+	hash, err := worktree.Commit(commitMessage, &git.CommitOptions{})
+	if err != nil {
 		return err
-	} else {
-		fmt.Printf("Committed %v\n", hash)
 	}
+	log.Printf("Commit %v\n", hash)
 	return nil
 }
 
 func (s *inMemoryStore) onWrite(file string, alias string) error {
-	fileNameWithoutPath := filepath.Base(file)
-	worktree, err := s.repo.Worktree()
-	if err != nil {
-		return err
-	}
-	p := path.Join(alias, fileNameWithoutPath)
-
-	osFile, err := os.Open(file)
-	defer osFile.Close()
-	if err != nil {
-		return err
-	}
-	if f, err := s.fs.Create(p); err != nil {
-		return err
-	} else {
-		var buf = make([]byte, 1000)
-		for {
-			n, e := osFile.Read(buf)
-			if e != nil && e != io.EOF {
-				return e
-			}
-			n2, e2 := f.Write(buf[:n])
-			if e2 != nil {
-				return e2
-			}
-			if n2 != n {
-				return errors.New("read != write")
-			}
-			if n == len(buf) {
-				continue
-			}
-			break
-		}
-	}
-	if _, err = worktree.Add(p); err != nil {
-		return err
-	}
-	if err := s.commit(); err != nil {
+	if err := s.writeWithoutCommit(file, alias); err != nil {
 		return err
 	}
 	return nil
@@ -124,13 +90,54 @@ func (s *inMemoryStore) onRemove(file string, alias string) error {
 		return err
 	}
 	p := path.Join(alias, fileNameWithoutPath)
-
-	fmt.Printf("Remove %v\n", p)
 	if _, err = worktree.Remove(p); err != nil {
 		return err
 	}
-	if err := s.commit(); err != nil {
-		return err
+	return nil
+}
+
+func (s *inMemoryStore) writeWithoutCommit(file string, alias string) (err error) {
+	fileNameWithoutPath := filepath.Base(file)
+	var worktree *git.Worktree
+	worktree, err = s.repo.Worktree()
+	if err != nil {
+		return
+	}
+	p := path.Join(alias, fileNameWithoutPath)
+
+	var osFile *os.File
+	osFile, err = os.Open(file)
+	defer func(f *os.File) {
+		err = f.Close()
+	}(osFile)
+	if err != nil {
+		return
+	}
+	var f billy.File
+	if f, err = s.fs.Create(p); err != nil {
+		return
+	}
+	defer func(f billy.File) {
+		err = f.Close()
+	}(f)
+
+	var readBuf = make([]byte, fileReadBufferSize)
+	var bytesRead int
+	for bytesRead < len(readBuf) && err != io.EOF {
+		bytesRead, err = osFile.Read(readBuf)
+		if err != nil && err != io.EOF {
+			return
+		}
+		bytesWritten, writeErr := f.Write(readBuf[:bytesRead])
+		if writeErr != nil {
+			return writeErr
+		}
+		if bytesWritten != bytesRead {
+			return errors.New("read != write")
+		}
+	}
+	if _, err = worktree.Add(p); err != nil {
+		return
 	}
 	return nil
 }
@@ -153,9 +160,6 @@ func newInMemoryStore(cfg *Config) (store, error) {
 	if err := worktree.RemoveGlob("*"); err != nil {
 		return nil, err
 	}
-	//if err := removeAll(filesystem, "/", repo); err != nil {
-	//	return nil, err
-	//}
 	for _, pathMapping := range cfg.PathMappings {
 		if err := filesystem.MkdirAll(pathMapping.GitPath, os.ModeDir); err != nil {
 			return nil, err
@@ -179,7 +183,7 @@ func newInMemoryStore(cfg *Config) (store, error) {
 				return nil, err
 			}
 			if ok {
-				if err := store.onWrite(abs, pathMapping.GitPath); err != nil {
+				if err := store.writeWithoutCommit(abs, pathMapping.GitPath); err != nil {
 					return nil, err
 				}
 			}
@@ -190,29 +194,3 @@ func newInMemoryStore(cfg *Config) (store, error) {
 	}
 	return store, nil
 }
-
-//func removeAll(filesystem billy.Filesystem, path string, repo *git.Repository) error {
-//	dirInfos, err := filesystem.ReadDir(path)
-//	if err != nil {
-//		return err
-//	}
-//	for _, dirInfo := range dirInfos {
-//		p := path
-//		if p == "/" {
-//			p = ""
-//		}
-//		pathToRemove := fmt.Sprintf("%v/%v", p, dirInfo.Name())
-//		if dirInfo.IsDir() {
-//			return removeAll(filesystem, pathToRemove, nil)
-//		}
-//		if err := filesystem.Remove(pathToRemove); err != nil {
-//			return err
-//		}
-//		worktree, err := repo.Worktree()
-//		if err != nil {
-//			return err
-//		}
-//		worktree.Remove()
-//	}
-//	return filesystem.Remove(path)
-//}

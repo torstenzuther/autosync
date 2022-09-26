@@ -32,17 +32,16 @@ type Config struct {
 }
 
 // loadConfig loads the configuration from the given path (JSON format) or otherwise returns an error
-func loadConfig(file string) (*Config, error) {
-	var config Config
-	configFile, err := os.Open(file)
-	defer configFile.Close()
+func loadConfig(file string) (config *Config, err error) {
+	var configFile *os.File
+	configFile, err = os.Open(file)
 	if err != nil {
-		return nil, err
+		return
 	}
+	defer func(configFile *os.File) {
+		err = configFile.Close()
+	}(configFile)
 	jsonParser := json.NewDecoder(configFile)
 	err = jsonParser.Decode(&config)
-	if err != nil {
-		return nil, err
-	}
-	return &config, nil
+	return
 }

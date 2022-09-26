@@ -16,7 +16,6 @@ const (
 // i.e. events are accumulated and only flushed after the debounceTime has elapsed
 type debouncedWatcher struct {
 	*sync.WaitGroup
-	eventQueue   *eventQueue
 	events       chan notify.EventInfo
 	debounceTime time.Duration
 }
@@ -25,8 +24,7 @@ type debouncedWatcher struct {
 // file and debounceTime. It immediately starts watching or returns an error.
 func newDebouncedWatcher(file string, debounceTime time.Duration) (*debouncedWatcher, error) {
 	events := make(chan notify.EventInfo, eventChannelSize)
-	err := notify.Watch(file, events, notify.All)
-	if err != nil {
+	if err := notify.Watch(file, events, notify.All); err != nil {
 		defer close(events)
 		defer notify.Stop(events)
 		return nil, err
@@ -34,7 +32,6 @@ func newDebouncedWatcher(file string, debounceTime time.Duration) (*debouncedWat
 
 	return &debouncedWatcher{
 		WaitGroup:    &sync.WaitGroup{},
-		eventQueue:   newEventQueue(),
 		debounceTime: debounceTime,
 		events:       events,
 	}, nil
@@ -49,20 +46,20 @@ func (w *debouncedWatcher) close() {
 }
 
 // watchAsync starts watching the registered files in a separate go-routine.
-func (w *debouncedWatcher) watchAsync(processElement func(path string, event notify.Event)) {
+func (w *debouncedWatcher) watchAsync(processElement func(path string, event notify.Event), flush func()) {
 	w.Wait()
 	w.Add(1)
-	go w.watch(processElement)
+	go w.watch(processElement, flush)
 }
 
 // watch the registered files and call the given callback function for each event
-func (w *debouncedWatcher) watch(processElement func(path string, event notify.Event)) {
+func (w *debouncedWatcher) watch(processElement func(path string, event notify.Event), flush func()) {
 	events := newEventQueue()
 	debounceTicker := time.NewTicker(time.Second * debounceTimeInSeconds)
 	quit := func() {
 		defer w.Done()
 		debounceTicker.Stop()
-		events.flush(processElement)
+		events.flush(processElement, flush)
 	}
 	for {
 		select {
@@ -73,7 +70,7 @@ func (w *debouncedWatcher) watch(processElement func(path string, event notify.E
 			}
 			events.queue(event)
 		case <-debounceTicker.C:
-			events.flush(processElement)
+			events.flush(processElement, flush)
 		}
 	}
 }

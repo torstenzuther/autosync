@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"path/filepath"
 
@@ -25,27 +24,31 @@ func newWatcherSwarm(watcherFactory func(string) (watcher, error), store store) 
 }
 
 // updateWatchers reconfigures the watcherSwarm by closing and recreating watchers
-func (w *watcherSwarm) updateWatchers(config *Config) {
+func (w *watcherSwarm) updateWatchers(config *Config) error {
 	w.close()
-	for _, watcher := range w.watchers {
-		watcher.close()
-	}
 	w.watchers = nil
 	for _, pathMapping := range config.PathMappings {
 		configPathPatternAbs, err := filepath.Abs(pathMapping.Pattern)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		watchPath := filepath.Join(filepath.Dir(configPathPatternAbs), "...")
 		watcher, err := w.watcherFactory(watchPath)
 		if err != nil {
-			log.Printf("%v\n", err)
-			continue
+			return err
 		}
-		watcher.watchAsync(processFunc(w.store, pathMapping.GitPath, configPathPatternAbs))
+		watcher.watchAsync(processFunc(w.store, pathMapping.GitPath, configPathPatternAbs), func() {
+			if err := w.store.commit(); err != nil {
+				logError(err)
+			}
+			if err := w.store.push(); err != nil {
+				logError(err)
+			}
+		})
 		w.watchers = append(w.watchers, watcher)
-		fmt.Printf("Watching %v\n", configPathPatternAbs)
+		log.Printf("Watching %v\n", configPathPatternAbs)
 	}
+	return nil
 }
 
 // close the watcherSwarm i.e. all its watchers
@@ -55,19 +58,23 @@ func (w *watcherSwarm) close() {
 	}
 }
 
+func logError(err error) {
+	log.Printf("%v\n", err)
+}
+
 func processFunc(store store, alias string, pattern string) func(string, notify.Event) {
 	return func(eventPath string, event notify.Event) {
 		patternAbs, err := filepath.Abs(pattern)
 		if err != nil {
-			log.Printf("%v\n", err)
+			logError(err)
+			return
 		}
 		ok, err := filepath.Match(patternAbs, eventPath)
 		if err != nil {
-			log.Printf("%v\n", err)
+			logError(err)
+			return
 		}
 		if ok {
-			fmt.Printf(": %v %v %v -> %v\n", eventPath, patternAbs, event, alias)
-
 			var action func(string, string) error
 
 			switch event {
@@ -84,7 +91,7 @@ func processFunc(store store, alias string, pattern string) func(string, notify.
 			}
 
 			if err := action(eventPath, alias); err != nil {
-				log.Printf("%v\n", err)
+				logError(err)
 			}
 		}
 	}

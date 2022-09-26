@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/rjeczalik/notify"
@@ -24,9 +23,12 @@ func newEventQueue() *eventQueue {
 
 // flush empties the eventQueue and processes each element by
 // passing it to the provided callback function
-func (q *eventQueue) flush(processCallback func(path string, event notify.Event)) {
+func (q *eventQueue) flush(processCallback func(path string, event notify.Event), flush func()) {
 	for path, event := range q.events {
 		processCallback(path, event)
+	}
+	if len(q.events) > 0 {
+		flush()
 	}
 	q.Add(-len(q.events))
 	q.events = map[string]notify.Event{}
@@ -38,5 +40,4 @@ func (q *eventQueue) queue(event notify.EventInfo) {
 		q.Add(1)
 	}
 	q.events[event.Path()] = event.Event()
-	fmt.Printf("EVENT: %v %v\n", event.Path(), q.events[event.Path()])
 }
