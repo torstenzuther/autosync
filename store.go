@@ -46,10 +46,16 @@ func getAuthFromConfig(config *GitConfig) transport.AuthMethod {
 }
 
 func (s *inMemoryStore) commit() error {
-
 	worktree, err := s.repo.Worktree()
 	if err != nil {
 		return err
+	}
+	status, err := worktree.Status()
+	if err != nil {
+		return nil
+	}
+	if status.IsClean() {
+		return nil
 	}
 	if hash, err := worktree.Commit("autosync", &git.CommitOptions{}); err != nil {
 		return err
