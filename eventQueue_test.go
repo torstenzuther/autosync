@@ -86,6 +86,7 @@ func TestQueueFlush(t *testing.T) {
 		eventQueue.flush(func(path string, event notify.Event) {
 			paths = append(paths, path)
 			events = append(events, event)
+		}, func() {
 		})
 		assert.Empty(t, eventQueue.events)
 		assert.EqualValues(t, paths, test.expectedProcessedPaths)
