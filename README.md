@@ -1,6 +1,4 @@
-# Autosync 🖄
-
-## About 📖
+![](logo.svg)
 
 **Autosync** is an administration tool to automatically track changes across multiple files and / or folders and push them to a git repository.
 
