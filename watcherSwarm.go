@@ -15,7 +15,7 @@ type watcherSwarm struct {
 }
 
 // newWatcherSwarm returns a new watcherSwarm instance
-func newWatcherSwarm(watcherFactory func(string) (watcher, error), store store) *watcherSwarm {
+func newWatcherSwarm(watcherFactory func(string, ProcessingConfig) (watcher, error), store store) *watcherSwarm {
 	return &watcherSwarm{
 		watchers:       []watcher{},
 		watcherFactory: watcherFactory,
@@ -33,7 +33,7 @@ func (w *watcherSwarm) updateWatchers(config *Config) error {
 			return err
 		}
 		watchPath := filepath.Join(filepath.Dir(configPathPatternAbs), "...")
-		watcher, err := w.watcherFactory(watchPath)
+		watcher, err := w.watcherFactory(watchPath, config.Processing)
 		if err != nil {
 			return err
 		}

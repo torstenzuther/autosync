@@ -8,16 +8,12 @@
   },
   "path-mappings": [
     {
-      "path": "b",
-      "pattern": "./test/*"
-    },
-    {
-      "path": "a",
-      "pattern": "./test/*"
-    },
-    {
-      "path": "c",
+      "path": "a/d",
       "pattern": "./test/*"
     }
-  ]
+  ],
+  "processing": {
+    "debounce": "1s",
+    "event-channel-size": 10000
+  }
 }

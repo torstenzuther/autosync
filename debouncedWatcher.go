@@ -7,22 +7,18 @@ import (
 	"github.com/rjeczalik/notify"
 )
 
-const (
-	eventChannelSize      = 10000
-	debounceTimeInSeconds = 1
-)
-
 // debouncedWatcher is a file watcher which de-bounces events
 // i.e. events are accumulated and only flushed after the debounceTime has elapsed
 type debouncedWatcher struct {
 	*sync.WaitGroup
 	events       chan notify.EventInfo
 	debounceTime time.Duration
+	config       ProcessingConfig
 }
 
 // newDebounceWatcher returns a new debouncedWatcher instance with the given
 // file and debounceTime. It immediately starts watching or returns an error.
-func newDebouncedWatcher(file string, debounceTime time.Duration) (*debouncedWatcher, error) {
+func newDebouncedWatcher(file string, debounceTime time.Duration, eventChannelSize int) (*debouncedWatcher, error) {
 	events := make(chan notify.EventInfo, eventChannelSize)
 	if err := notify.Watch(file, events, notify.All); err != nil {
 		defer close(events)
@@ -32,8 +28,8 @@ func newDebouncedWatcher(file string, debounceTime time.Duration) (*debouncedWat
 
 	return &debouncedWatcher{
 		WaitGroup:    &sync.WaitGroup{},
-		debounceTime: debounceTime,
 		events:       events,
+		debounceTime: debounceTime,
 	}, nil
 }
 
@@ -55,7 +51,7 @@ func (w *debouncedWatcher) watchAsync(processElement func(path string, event not
 // watch the registered files and call the given callback function for each event
 func (w *debouncedWatcher) watch(processElement func(path string, event notify.Event), flush func()) {
 	events := newEventQueue()
-	debounceTicker := time.NewTicker(time.Second * debounceTimeInSeconds)
+	debounceTicker := time.NewTicker(w.debounceTime)
 	quit := func() {
 		defer w.Done()
 		debounceTicker.Stop()
@@ -75,6 +71,10 @@ func (w *debouncedWatcher) watch(processElement func(path string, event notify.E
 	}
 }
 
-func debouncedWatcherFactory(watchPath string) (watcher, error) {
-	return newDebouncedWatcher(watchPath, time.Second*debounceTimeInSeconds)
+func debouncedWatcherFactory(watchPath string, config ProcessingConfig) (watcher, error) {
+	duration, err := time.ParseDuration(config.DebounceDuration)
+	if err != nil {
+		return nil, err
+	}
+	return newDebouncedWatcher(watchPath, duration, config.EventChannelSize)
 }

@@ -18,6 +18,14 @@ type GitConfig struct {
 	} `json:"auth"`
 }
 
+// ProcessingConfig contains parameters for file processing
+type ProcessingConfig struct {
+	// DebounceDuration is the time in seconds between commits
+	DebounceDuration string `json:"debounce"`
+	// EventChannelSize is the size of the event channel that is used to process file watcher notifications
+	EventChannelSize int `json:"event-channel-size"`
+}
+
 // Config is the data structure for configuring Autosync
 type Config struct {
 	// GitRepo contains all git repository related configuration settings
@@ -29,6 +37,8 @@ type Config struct {
 		// Pattern is the pattern that is watched. All file changes will be committed to the GitPath
 		Pattern string `json:"pattern"`
 	} `json:"path-mappings"`
+	// Processing contains parameters for file processing
+	Processing ProcessingConfig `json:"processing"`
 }
 
 // loadConfig loads the configuration from the given path (JSON format) or otherwise returns an error
